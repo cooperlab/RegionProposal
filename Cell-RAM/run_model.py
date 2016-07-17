@@ -11,7 +11,7 @@ import time
 def main():
 
     # Load dataset
-    npzfile = np.load('../LSTM/dataset_large.npz')
+    npzfile = np.load('../dataset_large_color.npz')
     X_train = npzfile['X_train']
     y_train = npzfile['y_train']
     X_val = npzfile['X_valid']
@@ -19,32 +19,39 @@ def main():
     X_test = npzfile['X_test']
     y_test = npzfile['y_test']
 
-    n_channels = 1
+    # Define dimension
+    n_channels = 3
     img_height = X_train.shape[1]
     img_width = X_train.shape[2]
 
-    # Preprocess dataset
+    # Convert data type
     X_train = X_train.astype('float32')
     X_val = X_val.astype('float32')
     X_test = X_test.astype('float32')
-
-    X_train_original = X_train
-    X_val_original = X_val
-    X_test_original = X_test
 
     y_train = y_train.astype('int32')
     y_val = y_val.astype('int32')
     y_test = y_test.astype('int32')
 
+    # Backup original data
+    X_train_original = X_train
+    X_val_original = X_val
+    X_test_original = X_test
+
+    # Normalize data
     X_train = stats.zscore(X_train, axis=0)
     X_val = stats.zscore(X_val, axis=0)
     X_test = stats.zscore(X_test, axis=0)
 
-    # Step1b: init variables
-    n_batch = 1
+    # Format dimension
+    X_train = np.transpose(X_train, (0, 3, 1, 2))[:, :3, :, :]
+    X_val = np.transpose(X_val, (0, 3, 1, 2))[:, :3, :, :]
+    X_test = np.transpose(X_test, (0, 3, 1, 2))[:, :3, :, :]
 
     # Define model
+    n_batch = 1
     input_shape = (n_batch, n_channels, img_height, img_width)
+    print "input shape: " + str(X_train.shape)
     specs = {
         'input_shape':input_shape,
         'patch':64,
@@ -54,15 +61,15 @@ def main():
         'n_f_g':64,
         'n_f_h':64,
         'n_h_fc_1':256,
-        'learning_rate':0.00001,
+        'learning_rate':0.000005,
         'n_classes':2,
         'sigma':0.1,
-        'patience':20,
-        'filter_shape_1':(128, 1, 3, 3),
+        'patience':50,
+        'filter_shape_1':(128, 3, 3, 3),
         'filter_shape_2':(128, 128, 3, 3),
         'stride':(1, 1),
         'pooling_shape':(2, 2),
-        'n_trials':4
+        'n_trials':2
         }
 
     # Define CRAM
@@ -73,8 +80,8 @@ def main():
     #X_in = np.reshape(X_train[0], input_shape)
     #print cram.debug(X_in, [y_train[0]])[0]
 
-    print "Start Training ..."
-    train_with_sgd(cram, input_shape, X_train, y_train, X_val, y_val, callback=sgd_callback)
+    #print "Start Training ..."
+    #train_with_sgd(cram, input_shape, X_train, y_train, X_val, y_val, callback=sgd_callback)
 
     print "Start Testing"
     # Predict a sample image
@@ -85,14 +92,14 @@ def main():
         X_in = np.reshape(x, input_shape)
         outs.append(cram.predict(X_in))
         # Show some results
-        l_t = cram.propose_region(X_in)
-        l_t = np.clip(np.reshape(l_t, (8, 2)), -1, 1)
-        print l_t
-        for k, l in enumerate(l_t):
-            img = rho(l, x)
-            cv2.imshow('patch_'+str(k), img.astype('uint8'))
-        cv2.imshow('img', x.astype('uint8'))
-        cv2.waitKey(0)
+        #l_t = cram.propose_region(X_in)
+        #l_t = np.clip(np.reshape(l_t, (8, 2)), -1, 1)
+        #print l_t
+        #for k, l in enumerate(l_t):
+        #    img = rho(l, x)
+        #    cv2.imshow('patch_'+str(k), img.astype('uint8'))
+        #cv2.imshow('img', x.astype('uint8'))
+        #cv2.waitKey(0)
 
     print np.array(outs).ravel().shape
     outs = np.array(outs).ravel()

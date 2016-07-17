@@ -12,8 +12,8 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
         super(GaussianCRAMPolicy, self).__init__(specs)
 
         # for glimps network, f_g
-        self.W_h_g = self.add_param(init.GlorotNormal(), (self.patch ** 2, self.n_h_g), name='W_h_g', type='r')
-        self.b_h_g = self.add_param(init.Constant(0.), (self.n_h_g,), name='b_h_g', type='r')
+        self.W_h_g = self.add_param(init.GlorotNormal(), (self.n_channels * self.patch ** 2, self.n_h_g), name='W_h_g', type='r')
+        self.b_h_g = self.add_param(init.Constant(0.), (self.n_batch, self.n_h_g), name='b_h_g', type='r')
 
         self.W_h_l = self.add_param(init.GlorotNormal(), (2, self.n_h_l), name='W_h_l', type='r')
         self.b_h_l = self.add_param(init.Constant(0.), (self.n_h_l,), name='b_h_l', type='r')
@@ -124,7 +124,8 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
 
             # Helper function
             def _f_g(x_t, loc_tm1):
-                h_g = T.nnet.relu(T.dot(x_t, self.W_h_g) + self.b_h_g.dimshuffle('x', 0))
+                debug = T.dot(x_t, self.W_h_g)
+                h_g = T.nnet.relu(debug + self.b_h_g)
                 h_l = T.nnet.relu(T.dot(loc_tm1, self.W_h_l) + self.b_h_l.dimshuffle('x', 0))
                 return T.nnet.relu(T.dot(h_g, self.W_f_g_1) + T.dot(h_l, self.W_f_g_2) + self.b_f_g.dimshuffle('x', 0))
 

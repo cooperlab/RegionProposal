@@ -34,7 +34,7 @@ class CRAM():
         preds = T.argmax(p_ts, axis=2)
 
         # Compute loss and updates
-        r_loss = self._r_loss(p_ts, self.policy.out_var)
+        r_loss = self._r_loss(preds, self.policy.out_var)
         p_loss = self._p_loss(prob_T, self.policy.out_var)
         updates = self._updates(prob_T, self.policy.out_var)
 
@@ -59,6 +59,7 @@ class CRAM():
         #return lasagne.updates.adam(loss_or_grads=self._r_grads(y) + self._p_grads(self._p_loss(prob, y)),
         #                            params=self.policy.r_params + self.policy.p_params,
         #                            learning_rate=self.policy.learning_rate)
+
         return lasagne.updates.adam(loss_or_grads= self._r_grads(y) + self._p_grads(self._p_loss(prob, y)),
                                     params=self.policy.r_params + self.policy.p_params,
                                     learning_rate=self.policy.learning_rate)
@@ -71,7 +72,8 @@ class CRAM():
         """
         return T.eq(pred, y)
 
-    def _r_loss(self, probs, y):
+    # TODO: tentar usar cross-entropy sem whitening
+    def _r_loss(self, preds, y):
         """
         :param preds: (n_batch, T) this variable stores the predictions for one path of size T
         :param y:   (n_batch, ) this variable stores the targets
@@ -79,8 +81,8 @@ class CRAM():
         """
         # y_rep: (n_batch, T, )
         y_rep = T.stack([T.fill(T.zeros((self.policy.n_steps)), y[b]) for b in xrange(self.policy.n_batch)], axis=0)
-        return T.nnet.binary_crossentropy(probs[:, :, 1], y_rep).mean(axis=[0,1])
-        #return T.neq(preds, y_rep).mean(axis=[0,1])
+        #return T.nnet.binary_crossentropy(probs[:, :, 1], y_rep).mean(axis=[0,1])
+        return T.neq(preds, y_rep).mean(axis=[0,1])
 
     def _p_loss(self, prob, y):
         """
