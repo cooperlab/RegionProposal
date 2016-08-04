@@ -11,42 +11,32 @@ import time
 def main():
 
     # Load dataset
-    npzfile = np.load('../dataset_large_color.npz')
+    npzfile = np.load('/home/nnauata/utils/dataset_2k_gray.npz')
     X_train = npzfile['X_train']
     y_train = npzfile['y_train']
     X_val = npzfile['X_valid']
     y_val = npzfile['y_valid']
-    X_test = npzfile['X_test']
-    y_test = npzfile['y_test']
+
+    cv2.imwrite( "sample_1.jpg", X_train[0])
+    cv2.imwrite( "sample_2.jpg", X_train[1])
 
     # Define dimension
-    n_channels = 3
+    n_channels = 1
     img_height = X_train.shape[1]
     img_width = X_train.shape[2]
 
-    # Convert data type
-    X_train = X_train.astype('float32')
-    X_val = X_val.astype('float32')
-    X_test = X_test.astype('float32')
-
+    # Process train and valid data
+    X_train = np.reshape(stats.zscore(X_train.astype('float32'), axis=0), (X_train.shape[0], 1, img_height, img_width))
     y_train = y_train.astype('int32')
+
+    X_val = np.reshape(stats.zscore(X_val.astype('float32'), axis=0), (X_val.shape[0], 1, img_height, img_width))
     y_val = y_val.astype('int32')
-    y_test = y_test.astype('int32')
-
-    # Backup original data
-    X_train_original = X_train
-    X_val_original = X_val
-    X_test_original = X_test
-
-    # Normalize data
-    X_train = stats.zscore(X_train, axis=0)
-    X_val = stats.zscore(X_val, axis=0)
-    X_test = stats.zscore(X_test, axis=0)
 
     # Format dimension
-    X_train = np.transpose(X_train, (0, 3, 1, 2))[:, :3, :, :]
-    X_val = np.transpose(X_val, (0, 3, 1, 2))[:, :3, :, :]
-    X_test = np.transpose(X_test, (0, 3, 1, 2))[:, :3, :, :]
+    print X_train.shape
+    #X_train = np.transpose(X_train, (0, 3, 1, 2))[:, :3, :, :]
+    #X_val = np.transpose(X_val, (0, 3, 1, 2))[:, :3, :, :]
+    #X_test = np.transpose(X_test, (0, 3, 1, 2))[:, :3, :, :]
 
     # Define model
     n_batch = 1
@@ -61,11 +51,11 @@ def main():
         'n_f_g':64,
         'n_f_h':64,
         'n_h_fc_1':256,
-        'learning_rate':0.000005,
+        'learning_rate':0.00005,
         'n_classes':2,
         'sigma':0.1,
         'patience':50,
-        'filter_shape_1':(128, 3, 3, 3),
+        'filter_shape_1':(128, 1, 3, 3),
         'filter_shape_2':(128, 128, 3, 3),
         'stride':(1, 1),
         'pooling_shape':(2, 2),
@@ -80,10 +70,17 @@ def main():
     #X_in = np.reshape(X_train[0], input_shape)
     #print cram.debug(X_in, [y_train[0]])[0]
 
-    #print "Start Training ..."
-    #train_with_sgd(cram, input_shape, X_train, y_train, X_val, y_val, callback=sgd_callback)
+    print "Start Training ..."
+    train_with_sgd(cram, input_shape, X_train, y_train, X_val, y_val, callback=sgd_callback)
 
     print "Start Testing"
+
+    # Process test data
+    X_test = npzfile['X_test']
+    y_test = npzfile['y_test']
+    X_test = np.reshape(stats.zscore(X_test.astype('float32'), axis=0), (X_test.shape[0], 1, img_height, img_width))
+    y_test = y_test.astype('int32')
+
     # Predict a sample image
     cram.load('trained_model.npz')
     outs = []
