@@ -11,33 +11,10 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
     def __init__(self, specs):
         super(GaussianCRAMPolicy, self).__init__(specs)
 
-        # for glimps network, f_g
-        self.W_h_g = self.add_param(init.GlorotNormal(), (self.n_channels * self.patch ** 2, self.n_h_g), name='W_h_g', type='r')
-        self.b_h_g = self.add_param(init.Constant(0.), (self.n_batch, self.n_h_g), name='b_h_g', type='r')
-
-        self.W_h_l = self.add_param(init.GlorotNormal(), (2, self.n_h_l), name='W_h_l', type='r')
-        self.b_h_l = self.add_param(init.Constant(0.), (self.n_h_l,), name='b_h_l', type='r')
-
-        self.W_f_g_1 = self.add_param(init.GlorotNormal(), (self.n_h_g, self.n_f_g), name='W_f_g_1', type='r')
-        self.W_f_g_2 = self.add_param(init.GlorotNormal(), (self.n_h_l, self.n_f_g), name='W_f_g_2', type='r')
-        self.b_f_g = self.add_param(init.Constant(0.), (self.n_f_g,), name='b_f_g', type='r')
-
-        # for core network, f_h
-        self.W_f_h_1 = self.add_param(init.GlorotNormal(), (self.n_f_g, self.n_f_h), name='W_f_h_1', type='r')
-        self.W_f_h_2 = self.add_param(init.GlorotNormal(), (self.n_f_g, self.n_f_h), name='W_f_h_2', type='r')
-        self.b_f_h = self.add_param(init.Constant(0.), (self.n_f_h,), name='b_f_h', type='r')
-
-        # for action network (location) f_l
-        self.W_f_l = self.add_param(init.GlorotNormal(), (self.n_f_h, 2), name='W_f_l', type='r')
-        self.b_f_l = self.add_param(init.Constant(0.), (2,), name='b_f_l', type='r')
-
-        # for action network, f_a
+        # Compute shapes
         out_shape_conv_1 = (self.input_shape[0], self.filter_shape_1[0],
                             (self.patch - self.filter_shape_1[2]) / self.stride[0] + 1,
                             (self.patch - self.filter_shape_1[3]) / self.stride[1] + 1)
-
-        self.W_conv_1 = self.add_param(init.GlorotNormal(), self.filter_shape_1, name='W_conv_1', type='p')
-        self.b_conv_1 = self.add_param(init.Constant(0.), out_shape_conv_1, name='b_conv_1', type='p')
 
         out_shape_pool_1 = (self.input_shape[0], self.filter_shape_1[0],
                             (int(out_shape_conv_1[2] / self.pooling_shape[0])),
@@ -46,8 +23,6 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
         out_shape_conv_2 = (self.input_shape[0], self.filter_shape_2[0],
                             (out_shape_pool_1[2] - self.filter_shape_2[2]) / self.stride[0] + 1,
                             (out_shape_pool_1[3] - self.filter_shape_2[3]) / self.stride[1] + 1)
-        self.W_conv_2 = self.add_param(init.GlorotNormal(), self.filter_shape_2, name='W_conv_2', type='p')
-        self.b_conv_2 = self.add_param(init.Constant(0.), out_shape_conv_2, name='b_conv_2', type='p')
 
         out_shape_pool_2 = (self.input_shape[0], self.filter_shape_2[0],
                             (int(out_shape_conv_2[2] / self.pooling_shape[0])),
@@ -55,11 +30,41 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
 
         fc_shape_1 = (np.prod(out_shape_pool_2[1:]), self.n_h_fc_1)
         out_shape_fc_1 = (self.input_shape[0], self.n_h_fc_1)
-        self.W_fc_1 = self.add_param(init.GlorotNormal(), fc_shape_1, name='W_fc_1', type='p')
-        self.b_fc_1 = self.add_param(init.Constant(0.), out_shape_fc_1, name='b_fc_1', type='p')
 
         fc_shape_2 = (self.n_h_fc_1, self.n_classes)
         out_shape_fc_2 = (self.input_shape[0], self.n_classes)
+
+        # add params for core network
+        # the number of hidden units is equal to the ouput of the first fully connected layer from the CNN
+        #self.W_f_h_1 = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='W_f_h_1', type='r')
+        #self.W_f_h_2 = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='W_f_h_2', type='r')
+        #self.b_f_h = self.add_param(init.Constant(0.), (self.n_h_fc_1,), name='b_f_h', type='r')
+
+        # add params for gated recurrent units
+        # the number of hidden units is equal to the ouput of the first fully connected layer from the CNN
+        self.W_gru_z = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='W_gru_z', type='r')
+        self.U_gru_z = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='U_gru_z', type='r')
+        self.b_gru_z = self.add_param(init.GlorotNormal(), (self.n_batch, self.n_h_fc_1), name='b_gru_z', type='r')
+
+        self.W_gru_r = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='W_gru_r', type='r')
+        self.U_gru_r = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='U_gru_r', type='r')
+        self.b_gru_r = self.add_param(init.GlorotNormal(), (self.n_batch, self.n_h_fc_1), name='b_gru_r', type='r')
+
+        self.W_gru_h = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='W_gru_h', type='r')
+        self.U_gru_h = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, self.n_h_fc_1), name='U_gru_h', type='r')
+        self.b_gru_h = self.add_param(init.GlorotNormal(), (self.n_batch, self.n_h_fc_1), name='b_gru_h', type='r')
+
+        # add params for action network (location)
+        self.W_f_l = self.add_param(init.GlorotNormal(), (self.n_h_fc_1, 2), name='W_f_l', type='r')
+        self.b_f_l = self.add_param(init.Constant(0.), (2,), name='b_f_l', type='r')
+
+        # add params for action network (classification)
+        self.W_conv_1 = self.add_param(init.GlorotNormal(), self.filter_shape_1, name='W_conv_1', type='p')
+        self.b_conv_1 = self.add_param(init.Constant(0.), out_shape_conv_1, name='b_conv_1', type='p')
+        self.W_conv_2 = self.add_param(init.GlorotNormal(), self.filter_shape_2, name='W_conv_2', type='p')
+        self.b_conv_2 = self.add_param(init.Constant(0.), out_shape_conv_2, name='b_conv_2', type='p')
+        self.W_fc_1 = self.add_param(init.GlorotNormal(), fc_shape_1, name='W_fc_1', type='p')
+        self.b_fc_1 = self.add_param(init.Constant(0.), out_shape_fc_1, name='b_fc_1', type='p')
         self.W_fc_2 = self.add_param(init.GlorotNormal(), fc_shape_2, name='W_fc_2', type='p')
         self.b_fc_2 = self.add_param(init.Constant(0.), out_shape_fc_2, name='b_fc_2', type='p')
 
@@ -105,7 +110,7 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
                 This function will be replaced
                 :param loc_tm1:
                 :param x:
-                :return: x_t (n_batch, img_height, img_width) and x_flattened (n_batch, img_height*img_width)
+                :return: x_t (n_batch, channels, img_height, img_width) and x_flattened (n_batch, img_height*img_width)
                 """
 
                 x_t_i = []
@@ -119,26 +124,40 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
                     x_t_i.append(img)
 
                 x_t = T.stack(x_t_i, axis=0)
-                x_t_flattened = x_t.reshape((self.n_batch, -1))
-                return x_t, x_t_flattened
+                return x_t
 
-            # Helper function
+            # Helper function -- This function extract features from the predicted window using the CNN from the classifier
             def _f_g(x_t, loc_tm1):
-                debug = T.dot(x_t, self.W_h_g)
-                h_g = T.nnet.relu(debug + self.b_h_g)
-                h_l = T.nnet.relu(T.dot(loc_tm1, self.W_h_l) + self.b_h_l.dimshuffle('x', 0))
-                return T.nnet.relu(T.dot(h_g, self.W_f_g_1) + T.dot(h_l, self.W_f_g_2) + self.b_f_g.dimshuffle('x', 0))
 
-            # Helper function
-            def _f_h(h_tm1, g_t):
-                return T.nnet.relu(T.dot(h_tm1, self.W_f_h_1) + T.dot(g_t, self.W_f_h_2) + self.b_f_h.dimshuffle('x', 0))
+                # Convolution 1
+                conv_out_1 = T.nnet.relu(T.nnet.conv2d(x_t, self.W_conv_1, subsample=self.stride) + self.b_conv_1)
+                pool_out_1 = pool_2d(conv_out_1, self.pooling_shape, ignore_border=True)
+
+                # Convolution 2
+                conv_out_2 = T.nnet.relu(
+                    T.nnet.conv2d(pool_out_1, self.W_conv_2, subsample=self.stride) + self.b_conv_2)
+                pool_out_2 =  pool_2d(conv_out_2, self.pooling_shape, ignore_border=True)
+
+                # Fully Connected
+                fc_out_1 = T.nnet.relu(
+                    T.dot(T.unbroadcast(pool_out_2.reshape((self.n_batch, -1)), 0), self.W_fc_1) + self.b_fc_1)
+                return fc_out_1
+
+            # Helper function -- This function updates the hidden state units
+            def _f_h(h_tm1, x_in):
+
+                z =  T.nnet.hard_sigmoid(T.dot(x_in, self.U_gru_z) + T.dot(h_tm1, self.W_gru_z) + self.b_gru_z)
+                r =  T.nnet.hard_sigmoid(T.dot(x_in, self.U_gru_r) + T.dot(h_tm1, self.W_gru_r) + self.b_gru_r)
+                h =  T.tanh(T.dot(x_in, self.U_gru_h) + T.dot((h_tm1 * r), self.W_gru_h) + self.b_gru_h)
+		return (1 - z) * h + z * h_tm1 
+                #return T.nnet.relu(T.dot(h_tm1, self.W_f_h_1) + T.dot(g_t, self.W_f_h_2) + self.b_f_h.dimshuffle('x', 0))
 
             # Helper function
             def _f_l(h_t):
                 return T.dot(h_t, self.W_f_l) + self.b_f_l.dimshuffle('x', 0)
 
-            x_t, x_t_flattened = _rho(loc_tm1, x)
-            g_t = _f_g(x_t_flattened, loc_tm1)
+            x_t = _rho(loc_tm1, x)
+            g_t = _f_g(x_t, loc_tm1)
             h_t = _f_h(h_tm1, g_t)
 
             # Stores the predicted means (n_batch, 2)
@@ -156,7 +175,7 @@ class GaussianCRAMPolicy(CustomRecurrentModel):
         [loc_means_t, locs_t, h_ts, x_ts, p_ts], updates = theano.scan(_step,
                                                  outputs_info=[None,
                                                                T.unbroadcast(theano.shared(np.random.uniform(-1.0, 1.0, (self.n_batch, 2)).astype('float32')),0),
-                                                               T.unbroadcast(theano.shared(np.random.uniform(-1.0, 1.0,(self.n_batch,self.n_f_h)).astype('float32')), 0),
+                                                               T.unbroadcast(theano.shared(np.random.uniform(-1.0, 1.0,(self.n_batch, self.n_h_fc_1)).astype('float32')), 0),
                                                                None,
                                                                None],
                                                  sequences=[self._srng.normal((self.n_steps, self.n_batch, 2), avg=0.0, std=self.sigma)],
