@@ -25,7 +25,7 @@ Part B - Hard-Attention Model using RL (Cell-RAM)
 
 #API Documentation
 
-The Cell Recurrent Attention Model (Cell-RAM) API is implemented using Theano XXX and provides
+The Cell Recurrent Attention Model (Cell-RAM) API is implemented using Theano 0.8.2 and provides
 tools for defining and training a recurrent model using the algorithm REINFORCE (ref).
 
 ```
