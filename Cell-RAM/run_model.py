@@ -7,39 +7,29 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score
 from collections import Counter
 from scipy import stats
 import time
+import openslide
+
+SIZE = 10000
 
 def main():
 
     # Load dataset
-    npzfile = np.load('/home/nnauata/utils/dataset_2k_gray.npz')
-    X_train = npzfile['X_train']
+    npzfile = np.load('/home/nnauata/utils/dataset_slides_path.npz')
+    X_train_path = npzfile['X_train']
     y_train = npzfile['y_train']
-    X_val = npzfile['X_valid']
+    X_val_path = npzfile['X_valid']
     y_val = npzfile['y_valid']
 
-    cv2.imwrite( "sample_1.jpg", X_train[0])
-    cv2.imwrite( "sample_2.jpg", X_train[1])
-
-    # Define dimension
-    n_channels = 1
-    img_height = X_train.shape[1]
-    img_width = X_train.shape[2]
-
     # Process train and valid data
-    X_train = np.reshape(stats.zscore(X_train.astype('float32'), axis=0), (X_train.shape[0], 1, img_height, img_width))
     y_train = y_train.astype('int32')
-
-    X_val = np.reshape(stats.zscore(X_val.astype('float32'), axis=0), (X_val.shape[0], 1, img_height, img_width))
     y_val = y_val.astype('int32')
-
-    # Format dimension
-    print X_train.shape
-    #X_train = np.transpose(X_train, (0, 3, 1, 2))[:, :3, :, :]
-    #X_val = np.transpose(X_val, (0, 3, 1, 2))[:, :3, :, :]
-    #X_test = np.transpose(X_test, (0, 3, 1, 2))[:, :3, :, :]
-
+    
     # Define model
     n_batch = 1
+    n_channels = 1
+    img_height = SIZE
+    img_width = SIZE
+
     input_shape = (n_batch, n_channels, img_height, img_width)
     print "input shape: " + str(X_train.shape)
     specs = {
@@ -51,7 +41,7 @@ def main():
         'n_f_g':64,
         'n_f_h':64,
         'n_h_fc_1':256,
-        'learning_rate':0.00005,
+        'learning_rate':0.0001,
         'n_classes':2,
         'sigma':0.1,
         'patience':50,
@@ -67,20 +57,19 @@ def main():
     cram = CRAM(specs)
     print("Compilation time: " + str(time.time()-start))
 
-    #X_in = np.reshape(X_train[0], input_shape)
-    #print cram.debug(X_in, [y_train[0]])[0]
+    print "Start Preprocessing ..."
+    X_train_obj = [openslide.OpenSlide(path) for path in X_train_path]
+    X_val_obj = [openslide.OpenSlide(path) for path in X_val_path]
 
     print "Start Training ..."
-    train_with_sgd(cram, input_shape, X_train, y_train, X_val, y_val, callback=sgd_callback)
+    train_with_sgd(cram, input_shape, X_train_obj, y_train, X_val_obj, y_val, callback=sgd_callback)
 
-    print "Start Testing"
-
-    # Process test data
+    print "Start Preprocessing ..."
     X_test = npzfile['X_test']
     y_test = npzfile['y_test']
-    X_test = np.reshape(stats.zscore(X_test.astype('float32'), axis=0), (X_test.shape[0], 1, img_height, img_width))
-    y_test = y_test.astype('int32')
+    X_test_obj = [openslide.OpenSlide(path) for path in X_train_path]
 
+    print "Start Testing ..."
     # Predict a sample image
     cram.load('trained_model.npz')
     outs = []
@@ -118,12 +107,11 @@ def main():
     print cram.calculate_total_loss(X_test, y_test)
     return
 
-def train_with_sgd(model, input_shape, X_train, y_train, X_valid, y_valid, nepoch=10000000, callback_every=200, callback=None):
-
+def train_with_sgd(model, input_shape, X_train_obj, y_train, X_valid_obj, y_valid, nepoch=10000000, callback_every=200, callback=None):
 
     # Init Early Stopping
     num_examples_seen = 0
-    valid_loss = model.calculate_total_loss(X_valid, y_valid)
+    valid_loss = model.calculate_total_loss(X_valid_obj, y_valid)
     model.init_score(valid_loss)
 
     # Run epochs
@@ -131,8 +119,7 @@ def train_with_sgd(model, input_shape, X_train, y_train, X_valid, y_valid, nepoc
         # For each training example...
         for i in np.random.permutation(len(y_train)):
             # One SGD step
-            X_in = np.reshape(X_train[i], input_shape)
-            #print model.debug(X_in, [y_train[i]])[0]
+            X_in = np.reshape(read_image_openslide(X_train[i]), input_shape)
             model.fit(X_in, [y_train[i]])
 
             num_examples_seen += 1
@@ -172,12 +159,15 @@ def sgd_callback(model, num_examples_seen, X_train, y_train, X_valid, y_valid):
     #cv2.waitKey(0)
     return
 
-def rho(l_tp1, x):
-    PATCH_SIZE = 64
-    y_start = int((1 + l_tp1[0]) * (500 - PATCH_SIZE) / 2)
-    x_start = int((1 + l_tp1[1]) * (500 - PATCH_SIZE) / 2)
-    img = x[y_start:y_start+PATCH_SIZE, x_start:x_start+PATCH_SIZE]
-    return img
+def read_image_openslide(full_path):
+    openslide.OpenSlide(full_path)
+    s = openslide.OpenSlide(full_path)
+    k = slide.level_count - 1
+    dim = slide.level_dimensions[k]
+    img = np.array(slide.read_region((0,0), k, dim)) 
+    final_img = Image.fromarray(img).convert("L")
+    return final_img.resize((SIZE, SIZE))
+
 if __name__ == "__main__":
     main()
 
