@@ -31,7 +31,7 @@ def main():
     img_width = SIZE
 
     input_shape = (n_batch, n_channels, img_height, img_width)
-    print "input shape: " + str(X_train.shape)
+    print "input shape: " + str(input_shape)
     specs = {
         'input_shape':input_shape,
         'patch':64,
